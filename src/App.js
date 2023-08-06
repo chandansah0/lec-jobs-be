@@ -4,11 +4,13 @@ const fs = require("fs");
 
 const cors = require("cors");
 const mongoose = require("mongoose");
+const bodyParser = require("body-parser");
 const { stringify } = require("querystring");
 
 const app = express();
 
 app.use(cors());
+app.use(bodyParser.json());
 
 const PORT = 5001;
 //http://localhost:5001 or http://localhost:5000/
@@ -17,11 +19,12 @@ const PORT = 5001;
 const mongoDbURI = "mongodb://localhost:27017/lec";
 mongoose.connect(mongoDbURI, {
   useNewUrlParser: true,
-  useUnifiedTopology: true, 
+  useUnifiedTopology: true,
 });
 const userSchema = new mongoose.Schema({
   email: String,
-  username: String,
+  username: { type: String, unique: true },
+  password: String,
   fullname: String,
   lastname: String,
   title: String,
@@ -36,17 +39,6 @@ const userSchema = new mongoose.Schema({
 
 const User = mongoose.model("user", userSchema);
 
-User.createCollection()
-  .then((col) => {
-    console.log("Collection", col, "created");
-  })
-  .catch((err) => {
-    console.log(err);
-  });
-
-
-
-//for posts
 const userSchemaposts = new mongoose.Schema({
   title: String,
   description: String,
@@ -65,15 +57,6 @@ const userSchemaposts = new mongoose.Schema({
 });
 
 const Post = mongoose.model("posts", userSchema);
-
-Post.createCollection()
-  .then((col) => {
-    console.log("Collection", col, "created");
-  })
-
-  .catch((err) => {
-    console.log(err);
-  });
 
 // Post.create(
 //   {
@@ -103,7 +86,7 @@ Post.createCollection()
 //     viewed_by: ["test111", "test1", "test123"],
 //     id: 3,
 //     user_id: 2,
-    // post_by_username: "test321",
+// post_by_username: "test321",
 //     post_by_fullname: "Test User2",
 //     post_date: "2023-06-10T21:51:10.643105",
 //     comments: [],
@@ -128,41 +111,70 @@ Post.createCollection()
 //   console.log("posts created");
 // });
 
-
 app.get("/", (req, res) => {
-  res.status(200).send("This is a response from BE");
+  res.status(200).send("This is a resonse from BE");
 });
 
-// read file and send content of file as response
+// read file and send content of file as resonse
 app.get("/api/v1/posts", (req, res) => {
-  const posts = fs. readFileSync("./data/posts.json", "utf-8").toString();
+  const posts = fs.readFileSync("./data/posts.json", "utf-8").toString();
   res.status(200).send(posts);
 });
 
-app.get("/api/v1/user", async (req, res) => {
-  //const user = fs. readFileSync("./data/user.json", "utf-8").toString();
-  const user = await User.find({id: 1});
-  res.status(200).send(user[0]);
-});
-app.post("/api/v1/user", (req, res) => {
-  User.create({
-    email: "test@test.com",
-    username: "profile",
-    fullname: "Chandan Prasad Sah",
-    title: "Software Developer",
-    skills: ["JS", "PHP", "JAVA"],
-    address: "Kathmandu, Nepal",
-    job_type: "Full Time",
-    id: id,
+app.post("/api/v1/login", async (req, res) => {
+  const user = await User.findOne({
+    username: req.body.username,
+    password: req.body.password,
     is_active: true,
-    followers: ["username123", "user234", "user543"],
-    followings: ["username123", "user234", "user543", "user555"],
-  })
-  user.create(newUser).then((createUser)=> {console.log})
-  .then(() => {
-    console.log("User Created");
   });
-})
+  if (user) {
+    res.status(200).send({ message: "Login successfull", data:user });
+  } else {
+    res.status(400).send({ error: "Invalid username or password" });
+  }
+});
+app.get("/api/v1/user", async (req, res) => {
+   //const user = fs. readFileSync("./data/user.json", "utf-8").toString();
+   const user = await User.find({ id: 1 });   res.status(200).send(user[0]);
+});
+app.post("/api/v1/user", async (req, res) => {
+  const lastUser = await User.findOne({}, null, { sort: { id: -1 } });
+  const { username, email, fullname, job_type, skills, address, password, title } =
+    req.body;
+  
+  const usernameUser = await User.findOne({username})
+  if (usernameUser) {
+    return res.status(400).send({ error: "username already exist" });
+  }
+  let id = 1;
+  if (lastUser) {
+    id = lastUser.id + 1;
+  }
+  const newUser = {
+    email,
+    password,
+    username,
+    fullname,
+    title,
+    skills,
+    address,
+    job_type,
+    id,
+    is_active: true,
+    followers: [],
+    followings: [],
+  };
+
+  User.create(newUser)
+    .then((createdUser) => {
+      console.log("User Created");
+      res.status(200).send(createdUser);
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).send({ error: "can not process your request" });
+    });
+});
 
 app.listen(PORT, () => {
   console.log("App is running on port" + PORT);
